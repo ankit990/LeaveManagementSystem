@@ -4,27 +4,21 @@ using Microsoft.EntityFrameworkCore;
 using LeaveManagementSystem.Data;
 using LeaveManagementSystem.Models.LeaveTypes;
 using AutoMapper;
+using LeaveManagementSystem.Services;
 
-public class LeaveTypesController : Controller
+public class LeaveTypesController(ILeaveTypesService _leaveTypesService) : Controller
 {
-    private readonly ApplicationDbContext _context;
-    private readonly IMapper _mapper;
+   
     private const string NameExistsValidationMessage = "A leave type with this name already exists.";
 
-    public LeaveTypesController(ApplicationDbContext context,IMapper mapper)
-    {
-        _context = context;
-        this._mapper = mapper;
-    }
+   
+
 
     // GET: LEAVETYPES
     public async Task<IActionResult> Index()    
     {
-        var data = await _context.LeaveTypes.ToListAsync();
-        //Convert the datamodel into viewmodel-use automapper
-
-        var viewData = _mapper.Map<List<LeaveTypeReadOnlyVM>>(data);
-         return View(viewData);
+        var viewData = await _leaveTypesService.GetAllLeaveTypes();
+        return View(viewData);
     }
 
     // GET: LEAVETYPES/Details/5
@@ -35,14 +29,12 @@ public class LeaveTypesController : Controller
             return NotFound();
         }
 
-        var leavetype = await _context.LeaveTypes
-            .FirstOrDefaultAsync(m => m.Id == id);
+        var leavetype = await _leaveTypesService.Get<LeaveTypeReadOnlyVM>(id.Value);
         if (leavetype == null)
         {
             return NotFound();
-        }
-        var viewData= _mapper.Map<LeaveTypeReadOnlyVM>(leavetype);
-        return View(viewData);
+        }                               
+        return View(leavetype);
     }
 
     // GET: LEAVETYPES/Create
@@ -58,16 +50,15 @@ public class LeaveTypesController : Controller
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> Create( LeaveTypeCreateVm leaveTypeCreate)
     {
-       if (await CheckIfLeaveTypeExists(leaveTypeCreate.Name))
+       if (await _leaveTypesService.CheckIfLeaveTypeExists(leaveTypeCreate.Name))
         {
             ModelState.AddModelError(nameof(leaveTypeCreate.Name), NameExistsValidationMessage);
         }
 
         if (ModelState.IsValid)
         {
-            var leavetype = _mapper.Map<LeaveType>(leaveTypeCreate);
-            _context.Add(leavetype);
-            await _context.SaveChangesAsync();
+            
+            await _leaveTypesService.Create(leaveTypeCreate);
             return RedirectToAction(nameof(Index));
         }
         return View(leaveTypeCreate);
@@ -83,13 +74,13 @@ public class LeaveTypesController : Controller
             return NotFound();
         }
 
-        var leavetype = await _context.LeaveTypes.FindAsync(id);
+        var leavetype = await _leaveTypesService.Get<LeaveTypeEditVm>(id.Value);
         if (leavetype == null)
         {
             return NotFound();
         }
-        var viewData = _mapper.Map<LeaveTypeEditVm>(leavetype);
-        return View(viewData);
+       
+        return View(leavetype);
     }
 
     // POST: LEAVETYPES/Edit/5
@@ -104,7 +95,7 @@ public class LeaveTypesController : Controller
             return NotFound();
         }
 
-        if (await CheckIfLeaveTypeExistsForEdit(leaveTypeEdit))
+        if (await _leaveTypesService.CheckIfLeaveTypeExistsForEdit(leaveTypeEdit))
         {
             ModelState.AddModelError(nameof(leaveTypeEdit.Name), NameExistsValidationMessage);
         }
@@ -112,13 +103,12 @@ public class LeaveTypesController : Controller
         {
             try
             {
-                var leavetype = _mapper.Map<LeaveType>(leaveTypeEdit);              
-                _context.Update(leavetype);
-                await _context.SaveChangesAsync();
+                
+                await _leaveTypesService.Edit(leaveTypeEdit);
             }
             catch (DbUpdateConcurrencyException)
             {
-                if (!LeaveTypeExists(leaveTypeEdit.Id))
+                if (_leaveTypesService.LeaveTypeExists(leaveTypeEdit.Id))
                 {
                     return NotFound();
                 }
@@ -142,43 +132,23 @@ public class LeaveTypesController : Controller
             return NotFound();
         }
 
-        var leavetype = await _context.LeaveTypes
-            .FirstOrDefaultAsync(m => m.Id == id);
+        var leavetype = await _leaveTypesService.Get<LeaveTypeReadOnlyVM>(id.Value);
         if (leavetype == null)
         {
             return NotFound();
         }
-        var viewData = _mapper.Map<LeaveTypeReadOnlyVM>(leavetype);
-        return View(viewData);
+        return View(leavetype);
     }
 
     // POST: LEAVETYPES/Delete/5
     [HttpPost, ActionName("Delete")]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> DeleteConfirmed(int? id)
+    public async Task<IActionResult> DeleteConfirmed(int id)
     {
-        var leavetype = await _context.LeaveTypes.FindAsync(id);
-        if (leavetype != null)
-        {
-            _context.LeaveTypes.Remove(leavetype);
-        }
-
-        await _context.SaveChangesAsync();
+       
+        await _leaveTypesService.Remove(id);
         return RedirectToAction(nameof(Index));
     }
 
-    private bool LeaveTypeExists(int? id)
-    {
-        return _context.LeaveTypes.Any(e => e.Id == id);
-    }
-    private async Task<bool> CheckIfLeaveTypeExists(string name)
-    {
-        var lowerCaseName = name.ToLower();
-        return await _context.LeaveTypes.AnyAsync(e => e.Name.ToLower().Equals(lowerCaseName));
-    }
-    private async Task<bool> CheckIfLeaveTypeExistsForEdit(LeaveTypeEditVm leaveTypeEdit)
-    {
-        var lowerCaseName = leaveTypeEdit.Name.ToLower();
-        return await _context.LeaveTypes.AnyAsync(e => e.Name.ToLower().Equals(lowerCaseName) && e.Id != leaveTypeEdit.Id);
-    }
+    
 }
